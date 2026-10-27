@@ -1,0 +1,43 @@
+
+name: Windows GPU Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check Windows and hardware
+        shell: pwsh
+        run: |
+          Write-Host "=== Windows ==="
+          Get-CimInstance Win32_OperatingSystem |
+            Select-Object Caption, Version
+
+          Write-Host "=== CPU and RAM ==="
+          Get-CimInstance Win32_ComputerSystem |
+            Select-Object NumberOfLogicalProcessors,
+              @{N='RAM_GB';E={
+                [math]::Round($_.TotalPhysicalMemory / 1GB, 1)
+              }}
+
+      - name: Detect graphics adapters
+        shell: pwsh
+        run: |
+          Write-Host "=== Graphics adapters ==="
+          Get-CimInstance Win32_VideoController |
+            Select-Object Name, DriverVersion,
+              VideoProcessor, AdapterRAM
+
+          Write-Host "=== DirectX ==="
+          dxdiag /whql:off /t "$env:RUNNER_TEMP\dxdiag.txt"
+          Start-Sleep -Seconds 5
+          if (Test-Path "$env:RUNNER_TEMP\dxdiag.txt") {
+            Get-Content "$env:RUNNER_TEMP\dxdiag.txt"
+          }
