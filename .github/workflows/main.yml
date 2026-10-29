@@ -6,17 +6,17 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360 # Batas maksimum running GitHub Actions (6 jam)
+    timeout-minutes: 360 # Batas maksimum berjalan (6 jam)
 
     steps:
-    - name: Mengunduh dan Menyiapkan Ngrok
+    - name: Menginstal Ngrok Resmi
       run: |
-        Invoke-WebRequest -Uri "https://equinox.io" -OutFile "ngrok.zip"
-        Expand-Archive ngrok.zip
+        # Menggunakan Chocolatey untuk menjamin ngrok terinstal dengan benar tanpa error link download
+        choco install ngrok -y
         
     - name: Autentikasi Ngrok
       run: |
-        .\ngrok\ngrok.exe authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+        ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
         
     - name: Mengaktifkan Akses Remote Desktop (RDP)
       run: |
@@ -26,21 +26,20 @@ jobs:
         
     - name: Membuat User RDP Baru
       run: |
-        # Membuat user baru dengan nama rdpfree dan password drpfree@123
+        # Membuat user: rdpfree dan password: drpfree@123
         net user rdpfree drpfree@123 /add
-        # Memasukkan user ke kelompok Administrator dan Remote Desktop Users
         net localgroup Administrators rdpfree /add
         net localgroup "Remote Desktop Users" rdpfree /add
         
     - name: Membuka Tunnel dan Menampilkan Informasi Koneksi
       run: |
-        # Perbaikan argumen ngrok v3: bendera region ditaruh di awal perintah sebelum tcp
-        Start-Process .\ngrok\ngrok.exe -ArgumentList "tcp --region=ap 3389"
+        # Membuka tunnel dengan protokol TCP ke port RDP (3389) menggunakan region Asia
+        Start-Process ngrok -ArgumentList "tcp 3389 --region=ap"
         
-        # Menambah waktu tunggu menjadi 15 detik agar ngrok benar-benar aktif dan memicu API lokal
+        # Jeda waktu 15 detik agar sistem ngrok siap dan stabil
         Start-Sleep -Seconds 15
         
-        # Mengambil alamat IP/Host publik dari API lokal Ngrok
+        # Mengambil alamat IP/Host publik dari API internal ngrok yang sedang berjalan
         $ngrok_url = (Invoke-WebRequest -Uri http://127.0.0 | ConvertFrom-Json).tunnels.public_url
         
         Write-Host "========================================="
@@ -49,5 +48,5 @@ jobs:
         Write-Host "PASSWORD: drpfree@123"
         Write-Host "========================================="
         
-        # Menjaga agar script tetap berjalan selama 6 jam
+        # Menjaga agar komputer virtual tidak langsung mati selama 6 jam
         Start-Sleep -Seconds 21600
