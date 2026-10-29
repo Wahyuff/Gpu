@@ -11,8 +11,7 @@ jobs:
     steps:
     - name: Mengunduh dan Menyiapkan Ngrok
       run: |
-        # Memperbaiki URL unduhan ke paket zip ngrok v3 resmi
-        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Invoke-WebRequest -Uri "https://equinox.io" -OutFile "ngrok.zip"
         Expand-Archive ngrok.zip
         
     - name: Autentikasi Ngrok
@@ -35,16 +34,20 @@ jobs:
         
     - name: Membuka Tunnel dan Menampilkan Informasi Koneksi
       run: |
-        # Membuka tunnel dengan region Asia (ap) untuk koneksi yang lebih cepat
-        # Pada ngrok v3, parameter ditulis: tcp 3389 --region ap
-        Start-Process .\ngrok\ngrok.exe -ArgumentList "tcp 3389 --region ap"
-        Start-Sleep -Seconds 10
+        # Perbaikan argumen ngrok v3: bendera region ditaruh di awal perintah sebelum tcp
+        Start-Process .\ngrok\ngrok.exe -ArgumentList "tcp --region=ap 3389"
+        
+        # Menambah waktu tunggu menjadi 15 detik agar ngrok benar-benar aktif dan memicu API lokal
+        Start-Sleep -Seconds 15
+        
         # Mengambil alamat IP/Host publik dari API lokal Ngrok
         $ngrok_url = (Invoke-WebRequest -Uri http://127.0.0 | ConvertFrom-Json).tunnels.public_url
+        
         Write-Host "========================================="
         Write-Host "ALAMAT KONEKSI RDP: $ngrok_url"
         Write-Host "USERNAME: rdpfree"
         Write-Host "PASSWORD: drpfree@123"
         Write-Host "========================================="
-        # Menjaga agar script tetap berjalan dan tidak langsung selesai
+        
+        # Menjaga agar script tetap berjalan selama 6 jam
         Start-Sleep -Seconds 21600
