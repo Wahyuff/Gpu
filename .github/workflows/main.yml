@@ -11,7 +11,6 @@ jobs:
     steps:
     - name: Menginstal Ngrok Resmi
       run: |
-        # Menggunakan Chocolatey untuk menjamin ngrok terinstal dengan benar tanpa error link download
         choco install ngrok -y
         
     - name: Autentikasi Ngrok
@@ -33,20 +32,31 @@ jobs:
         
     - name: Membuka Tunnel dan Menampilkan Informasi Koneksi
       run: |
-        # Membuka tunnel dengan protokol TCP ke port RDP (3389) menggunakan region Asia
-        Start-Process ngrok -ArgumentList "tcp 3389 --region=ap"
+        # Mengaktifkan logging ngrok ke file teks (ngrok.log) untuk menghindari error port 4040
+        Start-Process ngrok -ArgumentList "tcp 3389 --region=ap --log=stdout" -RedirectStandardOutput "ngrok.log"
         
-        # Jeda waktu 15 detik agar sistem ngrok siap dan stabil
+        # Jeda waktu 15 detik agar koneksi terbentuk sempurna
         Start-Sleep -Seconds 15
         
-        # Mengambil alamat IP/Host publik dari API internal ngrok yang sedang berjalan
-        $ngrok_url = (Invoke-WebRequest -Uri http://127.0.0 | ConvertFrom-Json).tunnels.public_url
+        # Membaca isi log dan menyaring teks alamat URL ngrok secara otomatis
+        $logContent = Get-Content ngrok.log
+        $ngrok_url = ($logContent | Select-String -Pattern "url=tcp://").Line
+        if ($ngrok_url -match "url=(tcp://[^\s]+)") {
+            $rdp_address = $Matches[1]
+        } else {
+            $rdp_address = "GAGAL MENDAPATKAN URL. Cek tab log di bawah!"
+        }
         
         Write-Host "========================================="
-        Write-Host "ALAMAT KONEKSI RDP: $ngrok_url"
+        Write-Host "ALAMAT KONEKSI RDP: $rdp_address"
         Write-Host "USERNAME: rdpfree"
         Write-Host "PASSWORD: drpfree@123"
         Write-Host "========================================="
         
-        # Menjaga agar komputer virtual tidak langsung mati selama 6 jam
+        # Cetak seluruh log ngrok ke layar untuk mempermudah pengecekan manual jika terjadi kendala
+        Write-Host "--- DETAIL LOG NGROK ---"
+        Get-Content ngrok.log
+        Write-Host "------------------------"
+        
+        # Menjaga agar komputer virtual tidak langsung mati
         Start-Sleep -Seconds 21600
