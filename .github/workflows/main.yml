@@ -11,7 +11,8 @@ jobs:
     steps:
     - name: Mengunduh dan Menyiapkan Ngrok
       run: |
-        Invoke-WebRequest https://equinox.io -OutFile ngrok.zip
+        # Memperbaiki URL unduhan ke paket zip ngrok v3 resmi
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
         Expand-Archive ngrok.zip
         
     - name: Autentikasi Ngrok
@@ -35,7 +36,8 @@ jobs:
     - name: Membuka Tunnel dan Menampilkan Informasi Koneksi
       run: |
         # Membuka tunnel dengan region Asia (ap) untuk koneksi yang lebih cepat
-        Start-Process .\ngrok\ngrok.exe -ArgumentList "tcp --region ap 3389"
+        # Pada ngrok v3, parameter ditulis: tcp 3389 --region ap
+        Start-Process .\ngrok\ngrok.exe -ArgumentList "tcp 3389 --region ap"
         Start-Sleep -Seconds 10
         # Mengambil alamat IP/Host publik dari API lokal Ngrok
         $ngrok_url = (Invoke-WebRequest -Uri http://127.0.0 | ConvertFrom-Json).tunnels.public_url
