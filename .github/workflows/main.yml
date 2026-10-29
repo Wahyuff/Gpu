@@ -19,7 +19,6 @@ jobs:
           Set-WinSystemLocale id-ID
           
           Write-Host "Mengubah Lokasi Geografis (GeoID) ke Indonesia..."
-          # GeoID untuk Indonesia adalah 111
           Set-WinHomeLocation -GeoId 111
           
           Write-Host "=== Verifikasi Pengaturan ==="
@@ -33,7 +32,7 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
 
-          # Memastikan firewall Windows di server membuka port untuk komunikasi jaringan luar secara penuh
+          # Memastikan firewall Windows di server membuka port untuk komunikasi secara penuh
           netsh advfirewall firewall delete rule name="RDP-Tailscale"
           netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
           netsh advfirewall firewall add rule name="Tailscale-UDP" dir=in action=allow protocol=UDP localport=41641
@@ -54,24 +53,21 @@ jobs:
               exit 1
           }
 
-      - name: Install Tailscale
+      - name: Install Tailscale Resmi via Chocolatey
         run: |
-          $tsUrl = "https://tailscale.com"
-          $installerPath = "$env:TEMP\tailscale.msi"
-          
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
-          Remove-Item $installerPath -Force
+          # Menggunakan Choco memastikan installer menunggu sampai selesai dan terdaftar di PATH otomatis
+          choco install tailscale -y
 
       - name: Establish Tailscale Connection
         run: |
           # Membuka port UDP 41641 agar Tailscale dapat membentuk jalur interkoneksi langsung (Direct P2P)
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=abdulhalim --port=41641
+          # Karena sudah masuk PATH lewat Choco, panggil langsung perintah 'tailscale'
+          tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=abdulhalim --port=41641
           
           $tsIP = $null
           $retries = 0
           while (-not $tsIP -and $retries -lt 12) {
-              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+              $tsIP = tailscale ip -4
               Start-Sleep -Seconds 5
               $retries++
           }
