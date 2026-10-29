@@ -1,4 +1,4 @@
-name: Windows RDP via Pinggy (No Credit Card)
+name: Windows RDP via Pinggy Fixed
 
 on:
   workflow_dispatch: # Memungkinkan Anda menjalankan RDP secara manual
@@ -24,22 +24,25 @@ jobs:
         
     - name: Membuka Tunnel dan Menampilkan Informasi Koneksi
       run: |
-        # Membuka tunnel TCP menggunakan SSH client bawaan ke server free.pinggy.io
-        # Output log langsung dialihkan ke pinggy.log agar IP bisa dibaca
-        Start-Process ssh -ArgumentList "-p 443 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R0:127.0.0.1:3389 tcp@free.pinggy.io" -RedirectStandardOutput "pinggy.log"
+        # Perbaikan: Menambahkan '+tcp' ke username SSH agar server Pinggy langsung memproses pembuatan tunnel TCP
+        Start-Process ssh -ArgumentList "-p 443 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 0:127.0.0.1:3389 tcp+tcp@free.pinggy.io" -RedirectStandardOutput "pinggy.log"
         
-        # Jeda waktu 15 detik agar koneksi SSH stabil dan membuat URL publik
-        Start-Sleep -Seconds 15
+        # Menaikkan waktu tunggu menjadi 20 detik agar proses negosiasi kunci SSH selesai
+        Start-Sleep -Seconds 20
         
         Write-Host "========================================="
         Write-Host "USERNAME: rdpfree"
         Write-Host "PASSWORD: drpfree@123"
         Write-Host "========================================="
         
-        # Mencetak log Pinggy ke layar untuk menyalin alamat IP RDP Anda
+        # Menampilkan isi file log secara real-time ke layar
         Write-Host "--- DETAIL INFORMASI KONEKSI PINGGY ---"
-        Get-Content pinggy.log
+        if (Test-Path "pinggy.log") {
+            Get-Content pinggy.log
+        } else {
+            Write-Host "File log belum terbuat. Memeriksa proses SSH..."
+        }
         Write-Host "---------------------------------------"
         
-        # Menjaga agar komputer virtual tetap menyala
+        # Menjaga komputer agar tetap menyala
         Start-Sleep -Seconds 21600
