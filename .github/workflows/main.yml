@@ -1,43 +1,48 @@
-
-name: Windows GPU Diagnostic
+name: Windows RDP via Ngrok
 
 on:
-  workflow_dispatch:
-
-permissions:
-  contents: read
+  workflow_dispatch: # Memungkinkan Anda menjalankan RDP secara manual
 
 jobs:
-  diagnose:
+  build:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 360 # Batas maksimum running GitHub Actions (6 jam)
 
     steps:
-      - name: Check Windows and hardware
-        shell: pwsh
-        run: |
-          Write-Host "=== Windows ==="
-          Get-CimInstance Win32_OperatingSystem |
-            Select-Object Caption, Version
-
-          Write-Host "=== CPU and RAM ==="
-          Get-CimInstance Win32_ComputerSystem |
-            Select-Object NumberOfLogicalProcessors,
-              @{N='RAM_GB';E={
-                [math]::Round($_.TotalPhysicalMemory / 1GB, 1)
-              }}
-
-      - name: Detect graphics adapters
-        shell: pwsh
-        run: |
-          Write-Host "=== Graphics adapters ==="
-          Get-CimInstance Win32_VideoController |
-            Select-Object Name, DriverVersion,
-              VideoProcessor, AdapterRAM
-
-          Write-Host "=== DirectX ==="
-          dxdiag /whql:off /t "$env:RUNNER_TEMP\dxdiag.txt"
-          Start-Sleep -Seconds 5
-          if (Test-Path "$env:RUNNER_TEMP\dxdiag.txt") {
-            Get-Content "$env:RUNNER_TEMP\dxdiag.txt"
-          }
+    - name: Mengunduh dan Menyiapkan Ngrok
+      run: |
+        Invoke-WebRequest https://equinox.io -OutFile ngrok.zip
+        Expand-Archive ngrok.zip
+        
+    - name: Autentikasi Ngrok
+      run: |
+        .\ngrok\ngrok.exe authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+        
+    - name: Mengaktifkan Akses Remote Desktop (RDP)
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+        
+    - name: Membuat User RDP Baru
+      run: |
+        # Membuat user baru dengan nama rdpfree dan password drpfree@123
+        net user rdpfree drpfree@123 /add
+        # Memasukkan user ke kelompok Administrator dan Remote Desktop Users
+        net localgroup Administrators rdpfree /add
+        net localgroup "Remote Desktop Users" rdpfree /add
+        
+    - name: Membuka Tunnel dan Menampilkan Informasi Koneksi
+      run: |
+        # Membuka tunnel dengan region Asia (ap) untuk koneksi yang lebih cepat
+        Start-Process .\ngrok\ngrok.exe -ArgumentList "tcp --region ap 3389"
+        Start-Sleep -Seconds 10
+        # Mengambil alamat IP/Host publik dari API lokal Ngrok
+        $ngrok_url = (Invoke-WebRequest -Uri http://127.0.0 | ConvertFrom-Json).tunnels.public_url
+        Write-Host "========================================="
+        Write-Host "ALAMAT KONEKSI RDP: $ngrok_url"
+        Write-Host "USERNAME: rdpfree"
+        Write-Host "PASSWORD: drpfree@123"
+        Write-Host "========================================="
+        # Menjaga agar script tetap berjalan dan tidak langsung selesai
+        Start-Sleep -Seconds 21600
