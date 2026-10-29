@@ -1,4 +1,4 @@
-name: Windows RDP via Pinggy Fixed
+name: Windows RDP via Pinggy Realtime
 
 on:
   workflow_dispatch: # Memungkinkan Anda menjalankan RDP secara manual
@@ -24,25 +24,13 @@ jobs:
         
     - name: Membuka Tunnel dan Menampilkan Informasi Koneksi
       run: |
-        # Perbaikan: Menambahkan '+tcp' ke username SSH agar server Pinggy langsung memproses pembuatan tunnel TCP
-        Start-Process ssh -ArgumentList "-p 443 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 0:127.0.0.1:3389 tcp+tcp@free.pinggy.io" -RedirectStandardOutput "pinggy.log"
-        
-        # Menaikkan waktu tunggu menjadi 20 detik agar proses negosiasi kunci SSH selesai
-        Start-Sleep -Seconds 20
-        
         Write-Host "========================================="
         Write-Host "USERNAME: rdpfree"
         Write-Host "PASSWORD: drpfree@123"
         Write-Host "========================================="
+        Write-Host "ALAMAT RDP AKAN MUNCUL DI BAWAH INI SECARA REAL-TIME:"
+        Write-Host "-----------------------------------------------------"
         
-        # Menampilkan isi file log secara real-time ke layar
-        Write-Host "--- DETAIL INFORMASI KONEKSI PINGGY ---"
-        if (Test-Path "pinggy.log") {
-            Get-Content pinggy.log
-        } else {
-            Write-Host "File log belum terbuat. Memeriksa proses SSH..."
-        }
-        Write-Host "---------------------------------------"
-        
-        # Menjaga komputer agar tetap menyala
-        Start-Sleep -Seconds 21600
+        # Perbaikan Total: Menjalankan SSH langsung di terminal utama tanpa dialihkan ke file teks.
+        # Menambahkan parameter '-t -t' untuk memaksa alokasi TTY virtual agar SSH tidak crash di GitHub Actions.
+        ssh -t -t -p 443 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 0:127.0.0.1:3389 tcp+tcp@free.pinggy.io
