@@ -1,36 +1,105 @@
-name: Windows RDP via Pinggy Realtime
+name: RDP Indonesia Server
 
 on:
   workflow_dispatch: # Memungkinkan Anda menjalankan RDP secara manual
 
 jobs:
-  build:
+  secure-rdp:
     runs-on: windows-latest
-    timeout-minutes: 360 # Batas maksimum berjalan (6 jam)
+    timeout-minutes: 360 # Batas maksimum dari GitHub adalah 6 jam
 
     steps:
-    - name: Mengaktifkan Akses Remote Desktop (RDP)
-      run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-        
-    - name: Membuat User RDP Baru
-      run: |
-        # Membuat user: rdpfree dan password: drpfree@123
-        net user rdpfree drpfree@123 /add
-        net localgroup Administrators rdpfree /add
-        net localgroup "Remote Desktop Users" rdpfree /add
-        
-    - name: Membuka Tunnel dan Menampilkan Informasi Koneksi
-      run: |
-        Write-Host "========================================="
-        Write-Host "USERNAME: rdpfree"
-        Write-Host "PASSWORD: drpfree@123"
-        Write-Host "========================================="
-        Write-Host "ALAMAT RDP AKAN MUNCUL DI BAWAH INI SECARA REAL-TIME:"
-        Write-Host "-----------------------------------------------------"
-        
-        # Perbaikan Total: Menjalankan SSH langsung di terminal utama tanpa dialihkan ke file teks.
-        # Menambahkan parameter '-t -t' untuk memaksa alokasi TTY virtual agar SSH tidak crash di GitHub Actions.
-        ssh -t -t -p 443 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 0:127.0.0.1:3389 tcp+tcp@free.pinggy.io
+      - name: Mengubah Region dan Zona Waktu ke Indonesia
+        run: |
+          Write-Host "Mengubah Zona Waktu ke WIB (SE Asia Standard Time)..."
+          Set-TimeZone -Id "SE Asia Standard Time"
+
+          Write-Host "Mengubah Regional Format ke Indonesia (id-ID)..."
+          Set-Culture id-ID
+          Set-WinSystemLocale id-ID
+          
+          Write-Host "Mengubah Lokasi Geografis (GeoID) ke Indonesia..."
+          # GeoID untuk Indonesia adalah 111
+          Set-WinHomeLocation -GeoId 111
+          
+          Write-Host "=== Verifikasi Pengaturan ==="
+          Get-TimeZone
+          Get-Culture
+          Get-WinHomeLocation
+
+      - name: Configure Core RDP Settings By Yamzz
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
+
+          # Memastikan firewall Windows di server membuka port untuk komunikasi jaringan luar secara penuh
+          netsh advfirewall firewall delete rule name="RDP-Tailscale"
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
+          netsh advfirewall firewall add rule name="Tailscale-UDP" dir=in action=allow protocol=UDP localport=41641
+
+          Restart-Service -Name TermService -Force
+
+      - name: Create RDP User with Secure Password
+        run: |
+          $username = "DenzzNOV"
+          $password = "DenzzNO@123"
+          
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+          New-LocalUser -Name $username -Password $securePass -AccountNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member $username
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username
+          
+          if (-not (Get-LocalUser -Name $username)) {
+              exit 1
+          }
+
+      - name: Install Tailscale
+        run: |
+          $tsUrl = "https://tailscale.com"
+          $installerPath = "$env:TEMP\tailscale.msi"
+          
+          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+          Remove-Item $installerPath -Force
+
+      - name: Establish Tailscale Connection
+        run: |
+          # Membuka port UDP 41641 agar Tailscale dapat membentuk jalur interkoneksi langsung (Direct P2P)
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=abdulhalim --port=41641
+          
+          $tsIP = $null
+          $retries = 0
+          while (-not $tsIP -and $retries -lt 12) {
+              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+              Start-Sleep -Seconds 5
+              $retries++
+          }
+          
+          if (-not $tsIP) {
+              exit 1
+          }
+          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+      
+      - name: Verify RDP Accessibility
+        run: |
+          Write-Host "Tailscale IP Terdeteksi: $env:TAILSCALE_IP"
+          $testResult = Test-NetConnection -ComputerName 127.0.0.1 -Port 3389
+          if (-not $testResult.TcpTestSucceeded) {
+              exit 1
+          }
+          Write-Host "Koneksi RDP siap dialihkan via Tailscale!"
+
+      - name: Maintain Connection
+        run: |
+          Write-Host "`n========================================="
+          Write-Host "KONEKSI RDP SILAKAN REMOTE LEWAT:"
+          Write-Host "ALAMAT/IP: abdulhalim (Atau gunakan IP Tailscale di log atas)"
+          Write-Host "USERNAME: DenzzNOV"
+          Write-Host "PASSWORD: DenzzNO@123"
+          Write-Host "=========================================`n"
+          
+          while ($true) {
+              Write-Host "[$(Get-Date)] RDP Server Tetap Aktif..."
+              Start-Sleep -Seconds 300
+          }
